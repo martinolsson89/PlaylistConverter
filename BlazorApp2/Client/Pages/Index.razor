@@ -1,0 +1,24 @@
+﻿@page "/"
+@inject NavigationManager NavigationManager
+
+<PageTitle>Index</PageTitle>
+<div class="d-flex justify-content-center align-items-center vh-100">
+    <div class="d-flex flex-column text-center" style="width: 300px;">
+        <h2 class="mb-4 fw-light text-muted">Welcome</h2>
+        <p class="mb-5 text-muted">Sign in to continue</p>
+        <button class="btn btn-lg btn-outline-primary d-flex align-items-center justify-content-center" @onclick="SignInWithGoogle">
+            <i class="bi bi-google me-2"></i> / Sign in with Google
+        </button>
+    </div>
+</div>
+
+@code {
+
+    private void SignInWithGoogle()
+    {
+        // Replace "yourserverbaseurl" with your actual server base URL
+        string serverBaseUrl = "https://localhost:5001";
+        string loginEndpoint = $"{serverBaseUrl}/auth/login";
+        NavigationManager.NavigateTo(loginEndpoint, forceLoad: true);
+    }
+}

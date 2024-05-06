@@ -1,0 +1,173 @@
+﻿@page "/playlist"
+@using BlazorApp2.Client.Services
+@inject HttpClient Http
+
+<PageTitle>Create Playlist</PageTitle>
+
+<section class="my-4 min-vh-100">
+<div class="d-flex justify-content-center align-items-start mt-5">
+    <div class="d-flex flex-column text-center me-2" style="width: 350px;">
+            <h2 class="mb-3 fw-light text-muted">Load Spotify playlist</h2>
+        <input id="spotify-input" class="form-control mb-3" @bind="SpotifyPlaylistUrl" placeholder="Spotify playlist URL"/>
+        <button id="spotify-btn" class="btn btn-lg btn-outline-success d-flex align-items-center justify-content-center mb-3" @onclick="ExtractAndFetchPlaylistData">
+            <i class="bi bi-spotify me-2"></i> Get Playlist
+        </button>
+            <p>Spotify URL example <i class="bi bi-info-circle" title="https://open.spotify.com/playlist/3cEYpjA9oz9GiPac4AsH4n"></i></p>
+    </div>
+        <i class="bi bi-arrow-right text-muted"></i>
+
+
+    <div class="d-flex flex-column text-center ms-2" style="width: 350px;">
+        <h2 class="mb-3 fw-light text-muted">Create Playlist</h2>
+        <input id="youtube-input" class="form-control mb-3" @bind="playlistName" placeholder="Enter playlist name"/>
+        <button id="youtube-btn" class="btn btn-lg btn-outline-danger d-flex align-items-center justify-content-center mb-3" @onclick="CreatePlaylist">
+            <i class="bi bi-youtube me-2"></i> Create Playlist
+        </button>
+    </div>
+</div>
+<div class="d-flex justify-content-center align-item-center">
+        <div class="d-flex flex-column" style="width: 350px;">
+        @if (playlistItems != null)
+        {
+            var count = 0;
+            <p class="card-text">@foreach (var item in playlistItems) 
+                                 {
+                                     if (count == 0)
+                                     {
+                                         <div><p class="fw-bolder">@item</p></div>
+                                     }
+                                     else
+                                     {
+                                         <div>@item</div>
+                                     }
+                                     count++;
+                                 }</p>
+        }
+    </div>
+    <div class="d-flex flex-column ps-4" style="width: 350px;">
+        @if (!string.IsNullOrEmpty(creationMessage))
+        {
+            <p class="text-success">@creationMessage</p>
+            @if (!string.IsNullOrEmpty(playlistUrl))
+            {
+                <button id="youtubeLoad-btn" class="btn btn-lg btn-outline-danger d-flex align-items-center justify-content-center mb-3" @onclick="LoadPlaylist">
+                    <i class="bi bi-youtube me-2"></i> Transfer playlist
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm ps-4" role="status" aria-hidden="true"></span>
+                    }
+                </button>
+                <p>Transferring your tracks my take a moment.</p>
+                    @if (!string.IsNullOrEmpty(loadMessage))
+                    {
+                        <p class="text-success">@loadMessage</p>
+                        <p>PlaylistURL: <a class="text-danger" href="@playlistUrl" target="_blank">@playlistUrl</a></p>
+                    }
+            }
+        }
+    </div> 
+</div>
+</section>
+@code {
+
+    private async Task LoadPlaylist()
+    {
+        isLoading = true;
+        var response = await Http.PostAsync($"/CreateYouTubePlaylist/{playlistId}/{youtubePlaylistId}", null);
+        if (response.IsSuccessStatusCode)
+        {
+            loadMessage = "Spotify tracks successfully transferred.";
+            isLoading = false;
+        }
+        else
+        {
+            loadMessage = "Failed to transfer tracks. " + await response.Content.ReadAsStringAsync();
+        }
+    }
+    private bool isLoading = false;
+    private string loadMessage;
+
+    private string playlistName;
+    private string creationMessage;
+    private string playlistUrl;
+    private string youtubePlaylistId;
+
+    private async Task CreatePlaylist()
+    {
+        if (string.IsNullOrWhiteSpace(playlistName))
+        {
+            creationMessage = "Playlist name is required.";
+            playlistUrl = null;
+            return;
+        }
+
+        try
+        {
+            var response = await Http.PostAsync($"/CreatePlaylist/{playlistName}", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<PlaylistCreationResult>();
+                playlistUrl = $"https://www.youtube.com/playlist?list={result.PlaylistId}";
+                youtubePlaylistId = result.PlaylistId;
+                creationMessage = "Playlist created successfully.";
+            }
+            else
+            {
+                creationMessage = "Failed to create the playlist. " + await response.Content.ReadAsStringAsync();
+                playlistUrl = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            creationMessage = $"An error occurred: {ex.Message}";
+            playlistUrl = null;
+        }
+    }
+
+    private class PlaylistCreationResult
+    {
+        public string PlaylistId { get; set; }
+        public string Message { get; set; }
+    }
+
+    private string SpotifyPlaylistUrl;
+    private string playlistId;
+    private List<string> playlistItems;
+    [Inject] private SpotifyAPIService SpotifyAPIService { get; set; }
+
+    private async Task ExtractAndFetchPlaylistData()
+    {
+        playlistId = ExtractPlaylistIdFromUrl(SpotifyPlaylistUrl);
+        if (!string.IsNullOrEmpty(playlistId))
+        {
+            playlistItems = await SpotifyAPIService.GetDataAsync(playlistId);
+        }
+    }
+
+
+    public string ExtractPlaylistIdFromUrl(string playlistUrl)
+    {
+        // Check if the URL is valid and contains the required path
+        if (!string.IsNullOrEmpty(playlistUrl) && playlistUrl.Contains("/playlist/"))
+        {
+            // Find the start index of the playlist ID
+            int startIndex = playlistUrl.IndexOf("/playlist/") + "/playlist/".Length;
+
+            // Check if there are query parameters starting with '?'
+            int endIndex = playlistUrl.IndexOf('?', startIndex);
+            if (endIndex == -1)
+            {
+                // If there are no query parameters, use the length of the URL
+                endIndex = playlistUrl.Length;
+            }
+
+            // Extract the playlist ID using the start and end indices
+            string playlistId = playlistUrl.Substring(startIndex, endIndex - startIndex);
+
+            return playlistId;
+        }
+
+        // Return null or throw an exception if the URL is not valid
+        return null;
+    }
+}
